@@ -1,12 +1,10 @@
 import time
 import tkinter as tk
+from tkinter import messagebox
 from collections import deque
 import heapq
 
-
-# ======================================================================
-#  LÓGICA (la misma de tu proyecto)
-# ======================================================================
+# Logica 
 laberinto = [
     [0, 0, 0, 0, 2, 0, 0, 1, 0],
     [0, 1, 1, 1, 0, 1, 0, 1, 0],
@@ -113,9 +111,8 @@ ALGORITMOS = {
     "UCS": (ucs_camino, "#27AE60"),   # verde
 }
 
-# ======================================================================
+
 #  INTERFAZ
-# ======================================================================
 CELDA = 56          # tamaño de cada celda en píxeles
 OX, OY = 36, 56     # margen izquierdo (números de fila) y superior (título + columnas)
 COLORES = {
@@ -139,6 +136,11 @@ class Interfaz:
         self.coins = COINS_INICIALES
         self.recorrido = []
 
+        #Control de jugadores y resultados
+        self.jug_actual = 1
+        self.resultados = {}
+
+        # diseño de la ventana
         ancho = OX + COLUMNAS * CELDA + 10
         alto = OY + FILAS * CELDA + 10
         self.canvas = tk.Canvas(root, width=ancho, height=alto, bg="white", highlightthickness=0)
@@ -158,7 +160,7 @@ class Interfaz:
 
         tk.Label(panel, text="Información", font=("Arial", 11, "bold")).pack(anchor="w", pady=(12, 0))
         self.info = tk.Label(panel, text="Elige un algoritmo\no juega manualmente.",
-                             justify="left", anchor="w", width=30, height=10, font=("Arial", 10))
+                             justify="left", anchor="nw", width=35, height=13, font=("Arial", 10))
         self.info.pack(anchor="w")
 
         leyenda = tk.Frame(panel)
@@ -177,7 +179,7 @@ class Interfaz:
 
         self.dibujar_tablero()
 
-    # ---------------- dibujo ----------------
+    # dibujo 
     def centro(self, celda):
         i, j = celda
         return OX + j * CELDA + CELDA / 2, OY + i * CELDA + CELDA / 2
@@ -213,7 +215,7 @@ class Interfaz:
     def set_info(self, texto):
         self.info.config(text=texto)
 
-    # ---------------- control ----------------
+    # control 
     def cancelar_animacion(self):
         if self.job is not None:
             self.root.after_cancel(self.job)
@@ -225,7 +227,7 @@ class Interfaz:
         self.dibujar_tablero()
         self.set_info("Elige un algoritmo\no juega manualmente.")
 
-    # ---------------- modo automático ----------------
+    # modo automático 
     def ejecutar(self, nombre):
         self.reiniciar()
         funcion, color = ALGORITMOS[nombre]
@@ -261,59 +263,143 @@ class Interfaz:
         self.dibujar_paso(camino, i, color)
         self.job = self.root.after(DELAY_MS, self.animar, camino, color, i + 1)
 
-    # ---------------- modo manual ----------------
+    # modo manual 
     def iniciar_manual(self):
         self.reiniciar()
         self.modo = "manual"
-        self.pos = INICIO
+        self.resultados = {}
+        self.jug_actual = 1
+        self.inicia_jugador()
+
+    def inicia_jugador(self):
+        self.modo = "manual"
+        self.pos = INICIO # reinicia el juego para un nuevo jugador
         self.coins = COINS_INICIALES
         self.recorrido = [INICIO]
-        self.dibujar_paso(self.recorrido, 0, COLOR_MANUAL)
-        self.actualizar_manual("Usa W/A/S/D o las flechas.")
+
+        nombre = f"Jugador {self.jug_actual}"
+        self.dibujar_tablero(f"Modo manual - {nombre}: {self.coins:g} coins")
+        color = COLOR_MANUAL if self.jug_actual % 2 == 1 else "#E622CC"  # alterna colores
+        self.dibujar_paso(self.recorrido, 0, color)
+        
+        self.actualizar_manual(f"{nombre}, BIENVENIDO AL JUEGO.\n"
+                               f"Gana quien complete el laberinto con más coins.\n")
 
     def actualizar_manual(self, mensaje):
-        self.set_titulo(f"Manual: {len(self.recorrido) - 1} movimientos, {self.coins:g} coins")
-        self.set_info(f"Coins: {self.coins:g}\nMovimientos: {len(self.recorrido) - 1}\n\n{mensaje}")
+        self.set_titulo(f"jugador {self.jug_actual}: "f"Manual: {len(self.recorrido) - 1} movimientos, {self.coins:g} coins")
+        self.set_info(f"Jugador {self.jug_actual}\n" f"Coins: {self.coins:g}\nMovimientos: {len(self.recorrido) - 1}\n\n{mensaje}")
 
     def on_key(self, event):
         if self.modo != "manual":
             return
-        d = self.teclas.get(event.keysym.lower())
-        if d is None:
+        # Detecta la tecla presionada y calcula el nuevo movimiento
+        movimiento = self.teclas.get(event.keysym.lower())
+        if movimiento is None:
             return
-        nueva = (self.pos[0] + d[0], self.pos[1] + d[1])
+        #Calcula la nueva posición
+        nueva = (self.pos[0] + movimiento[0], self.pos[1] + movimiento[1])
+
+        # Verifica si el movimiento es válido (dentro del laberinto y no hacia un muro)
         if nueva not in grafo[self.pos]:
             self.actualizar_manual("Movimiento inválido\n(muro o borde).")
             return
 
         costo = costo_celda(laberinto[nueva[0]][nueva[1]])
         if self.coins < costo:
-            self.modo = None
-            self.set_titulo("Manual: perdiste")
-            self.set_info("❌ No tienes coins para\nentrar a esa celda.\n¡Perdiste!")
+            self.finalizar_turno_manual(False, "No tienes suficientes coins para entrar a esa celda.")      
             return
 
         self.coins -= costo
         self.pos = nueva
         self.recorrido.append(nueva)
-        self.dibujar_paso(self.recorrido, len(self.recorrido) - 1, COLOR_MANUAL)
+        color = COLOR_MANUAL if self.jug_actual % 2 == 1 else "#E622CC"
+        self.dibujar_paso(self.recorrido, len(self.recorrido) - 1, color)
 
         celda = laberinto[nueva[0]][nueva[1]]
         if celda == 9:
-            self.modo = None
-            self.set_titulo(f"Manual: ¡meta! {len(self.recorrido) - 1} movimientos, {self.coins:g} coins")
-            self.set_info(f"🎉 ¡Llegaste a la meta!\nCoins restantes: {self.coins:g}")
+            self. actualizar_manual("🏁 ¡Llegaste a la meta!")
+            self.finalizar_turno_manual(True, "¡Felicidades! Llegaste a la meta.")
         elif self.coins <= 0:
-            self.modo = None
-            self.set_titulo("Manual: perdiste")
-            self.set_info("❌ Te quedaste sin coins.\n¡Perdiste!")
+            self.actualizar_manual("⚠ Te quedaste sin coins.")
+            self.finalizar_turno_manual(False, "Te quedaste sin coins.")
         elif celda == 2:
             self.actualizar_manual("⚠ ¡Penalización! (-3)")
         elif celda == 3:
             self.actualizar_manual("🎁 ¡Premio! (-0.25)")
         else:
-            self.actualizar_manual("")
+            self.actualizar_manual("Movimiento realizado.")
 
+    def finalizar_turno_manual(self, gano, mensaje):
+        self.modo = None
+        numero = self.jug_actual
+        gastadas = COINS_INICIALES - self.coins
+
+        self.resultados[numero] = {
+            "gano": gano,
+            "coins": self.coins,
+            "gastadas": gastadas,
+            "movimientos": len(self.recorrido) - 1,
+        }
+
+        resultado = self.resultados[numero]
+        resumen = (
+            f"JUGADOR {numero}\n\n"
+            f"Resultado: {'Llegó a la meta' if gano else 'Perdió'}\n"
+            f"Detalle: {mensaje}\n"
+            f"Movimientos: {resultado['movimientos']}\n"
+            f"Monedas gastadas: {resultado['gastadas']:g}\n"
+            f"Monedas restantes: {resultado['coins']:g}"
+        )
+        messagebox.showinfo(f"Resultados del Jugador {numero}", resumen, parent=self.root)
+
+        if numero == 1:
+            # El jugador 1 terminó. Se reinicia todo para el jugador 2.
+            messagebox.showinfo(
+                "Turno del Jugador 2",
+                "El tablero se reinició.\n"
+                "El Jugador 2 comienza con 30 monedas.\n"
+                "¡Buena suerte!",
+                parent=self.root
+            )
+            self.jug_actual = 2
+            self.inicia_jugador()
+            return
+
+        # El jugador 2 terminó: comparar los dos resultados.
+        self.modo = None
+        j1 = self.resultados[1]
+        j2 = self.resultados[2]
+
+        if j1["gano"] and j2["gano"]:
+            if j1["coins"] > j2["coins"]:
+                ganador = "¡GANA EL JUGADOR 1!"
+            elif j2["coins"] > j1["coins"]:
+                ganador = "¡GANA EL JUGADOR 2!"
+            else:
+                ganador = "¡EMPATE! Ambos llegaron con las mismas monedas."
+        elif j1["gano"]:
+            ganador = "¡GANA EL JUGADOR 1! Solo él llegó a la meta."
+        elif j2["gano"]:
+            ganador = "¡GANA EL JUGADOR 2! Solo él llegó a la meta."
+        else:
+            ganador = "NINGÚN JUGADOR LLEGÓ A LA META. No hay ganador."
+
+        comparacion = (
+            "RESULTADO FINAL\n\n"
+            f"Jugador 1: {'Llegó a la meta' if j1['gano'] else 'No llegó a la meta'}\n"
+            f"Monedas gastadas: {j1['gastadas']:g}\n"
+            f"Monedas restantes: {j1['coins']:g}\n"
+            f"Movimientos: {j1['movimientos']}\n\n"
+            f"Jugador 2: {'Llegó a la meta' if j2['gano'] else 'No llegó a la meta'}\n"
+            f"Monedas gastadas: {j2['gastadas']:g}\n"
+            f"Monedas restantes: {j2['coins']:g}\n"
+            f"Movimientos: {j2['movimientos']}\n\n"
+            f"{ganador}"
+        )
+
+        self.dibujar_tablero("Partida finalizada")
+        self.set_info(comparacion)
+        messagebox.showinfo("Ganador del laberinto", comparacion, parent=self.root)
 
 root = tk.Tk()
 Interfaz(root)
