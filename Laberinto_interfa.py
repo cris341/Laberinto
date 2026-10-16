@@ -80,7 +80,7 @@ def dfs_camino(grafo, inicio, objetivo):
                 pila.append(vecino)
     return None, len(visitados)
 
-def ucs_camino(grafo, inicio, objetivo):
+def bcu_camino(grafo, inicio, objetivo):
     dist = {inicio: 0}
     pred = {inicio: None}
     frontera = [(0, inicio)]
@@ -94,7 +94,7 @@ def ucs_camino(grafo, inicio, objetivo):
                 camino.append(nodo)
                 nodo = pred[nodo]
             camino.reverse()
-            return camino, len(dist)          # camino, nodos descubiertos
+            return camino, len(dist)# camino, nodos descubiertos
         for v in grafo[nodo]:
             nuevo = costo + costo_celda(laberinto[v[0]][v[1]])
             if nuevo < dist.get(v, float("inf")):
@@ -108,7 +108,7 @@ grafo = construir_grafo(laberinto)
 ALGORITMOS = {
     "BFS": (bfs_camino, "#C0392B"),   # rojo
     "DFS": (dfs_camino, "#2060C0"),   # azul
-    "UCS": (ucs_camino, "#27AE60"),   # verde
+    "BCU": (bcu_camino, "#27AE60"),   # verde
 }
 
 
